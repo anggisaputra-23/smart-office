@@ -1,0 +1,1286 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Smart Office Management System - REST API",
+    "description": "Dokumentasi REST API untuk Smart Office Management System. Sistem ini digunakan untuk mengelola peminjaman ruangan kantor secara digital. API ini mencakup autentikasi, manajemen ruangan, booking ruangan, jadwal, dan dashboard.\n\n## Akun Demo\n| Role | Email | Password |\n|------|-------|----------|\n| Admin | admin@office.com | password |\n| Karyawan | karyawan@office.com | password |\n\n## Alur Booking\n1. Karyawan login → dapat token\n2. Karyawan booking ruangan → status **pending**\n3. Admin approve/reject → status **approved** / **rejected**\n4. Booking selesai → status otomatis **completed**",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost/smart-office/api",
+      "description": "Local development server (Laragon)"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Authentication",
+      "description": "Endpoint untuk registrasi, login, logout, dan profil user"
+    },
+    {
+      "name": "Rooms",
+      "description": "Endpoint CRUD manajemen ruangan kantor (Admin untuk create/update/delete)"
+    },
+    {
+      "name": "Bookings",
+      "description": "Endpoint booking ruangan, approval admin, dan pembatalan"
+    },
+    {
+      "name": "Schedule",
+      "description": "Endpoint untuk melihat jadwal penggunaan ruangan (harian/mingguan)"
+    },
+    {
+      "name": "Dashboard",
+      "description": "Endpoint statistik dashboard"
+    }
+  ],
+  "paths": {
+    "/auth/register.php": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Register user baru",
+        "description": "Mendaftarkan akun baru dengan role default 'karyawan'. Mengembalikan token dan data user.",
+        "operationId": "registerUser",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              },
+              "example": {
+                "name": "John Doe",
+                "email": "john@office.com",
+                "password": "rahasia123",
+                "password_confirmation": "rahasia123"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Registrasi berhasil",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validasi gagal (email sudah terdaftar, password tidak cocok, dll)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/login.php": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Login user",
+        "description": "Login menggunakan email dan password. Mengembalikan Bearer Token yang valid selama 7 hari.",
+        "operationId": "loginUser",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              },
+              "example": {
+                "email": "admin@office.com",
+                "password": "password"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login berhasil",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Email atau password salah",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validasi gagal (email/password tidak diisi)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/logout.php": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Logout user",
+        "description": "Menghapus token aktif dari database. Token tidak bisa digunakan lagi setelah logout.",
+        "operationId": "logoutUser",
+        "security": [
+          { "bearerAuth": [] }
+        ],
+        "responses": {
+          "200": {
+            "description": "Logout berhasil",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token tidak valid atau tidak dikirim",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/me.php": {
+      "get": {
+        "tags": ["Authentication"],
+        "summary": "Profil user saat ini",
+        "description": "Mengembalikan data user yang sedang login berdasarkan token yang dikirim.",
+        "operationId": "getMe",
+        "security": [
+          { "bearerAuth": [] }
+        ],
+        "responses": {
+          "200": {
+            "description": "Data user berhasil diambil",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "Data user" },
+                    "data": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token tidak valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rooms/rooms.php": {
+      "get": {
+        "tags": ["Rooms"],
+        "summary": "Daftar / detail ruangan",
+        "description": "Mengambil daftar semua ruangan. Jika parameter 'id' dikirim, mengembalikan detail satu ruangan.",
+        "operationId": "getRooms",
+        "security": [
+          { "bearerAuth": [] }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "description": "ID ruangan (opsional). Jika dikirim, return detail 1 ruangan.",
+            "schema": {
+              "type": "integer",
+              "example": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daftar ruangan berhasil diambil",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "Daftar ruangan" },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Room"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token tidak valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ruangan tidak ditemukan (jika parameter id dikirim)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Rooms"],
+        "summary": "Tambah ruangan baru",
+        "description": "Menambahkan ruangan baru. **Hanya untuk admin.**",
+        "operationId": "createRoom",
+        "security": [
+          { "bearerAuth": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoomRequest"
+              },
+              "example": {
+                "name": "Meeting Room C",
+                "capacity": 8,
+                "facilities": "Proyektor, AC, Meja Bundar",
+                "status": "available"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Ruangan berhasil ditambahkan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "Ruangan berhasil ditambahkan" },
+                    "data": { "$ref": "#/components/schemas/Room" }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Akses ditolak (bukan admin)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validasi gagal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["Rooms"],
+        "summary": "Update ruangan",
+        "description": "Memperbarui data ruangan. **Hanya untuk admin.**",
+        "operationId": "updateRoom",
+        "security": [
+          { "bearerAuth": [] }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "description": "ID ruangan yang akan diupdate",
+            "schema": {
+              "type": "integer",
+              "example": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoomRequest"
+              },
+              "example": {
+                "name": "Meeting Room A Updated",
+                "capacity": 10,
+                "facilities": "Proyektor, Whiteboard, AC, TV",
+                "status": "maintenance"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ruangan berhasil diperbarui",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "Ruangan berhasil diperbarui" },
+                    "data": { "$ref": "#/components/schemas/Room" }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Akses ditolak (bukan admin)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ruangan tidak ditemukan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validasi gagal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Rooms"],
+        "summary": "Hapus ruangan",
+        "description": "Menghapus ruangan. **Hanya untuk admin.** Ruangan dengan booking aktif (pending/approved) tidak bisa dihapus.",
+        "operationId": "deleteRoom",
+        "security": [
+          { "bearerAuth": [] }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "description": "ID ruangan yang akan dihapus",
+            "schema": {
+              "type": "integer",
+              "example": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ruangan berhasil dihapus",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Akses ditolak (bukan admin)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ruangan tidak ditemukan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Ruangan masih memiliki booking aktif",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/bookings/bookings.php": {
+      "get": {
+        "tags": ["Bookings"],
+        "summary": "Daftar booking",
+        "description": "Mengambil daftar booking. Karyawan hanya melihat booking miliknya sendiri. Admin bisa melihat semua booking dan memfilter berdasarkan user.",
+        "operationId": "getBookings",
+        "security": [
+          { "bearerAuth": [] }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "description": "ID booking (opsional, untuk detail)",
+            "schema": { "type": "integer", "example": 1 }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Filter berdasarkan status",
+            "schema": {
+              "type": "string",
+              "enum": ["pending", "approved", "rejected", "completed"]
+            }
+          },
+          {
+            "name": "room_id",
+            "in": "query",
+            "required": false,
+            "description": "Filter berdasarkan ruangan",
+            "schema": { "type": "integer", "example": 1 }
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "description": "Filter berdasarkan tanggal (YYYY-MM-DD)",
+            "schema": { "type": "string", "example": "2026-06-22" }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "description": "Filter berdasarkan user (hanya admin)",
+            "schema": { "type": "integer", "example": 2 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daftar booking berhasil diambil",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "Daftar booking" },
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Booking" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "Akses ditolak (karyawan coba lihat booking user lain)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Bookings"],
+        "summary": "Buat booking baru",
+        "description": "Membuat booking ruangan baru. Sistem akan memvalidasi bentrok jadwal secara otomatis. Status awal: **pending**.",
+        "operationId": "createBooking",
+        "security": [
+          { "bearerAuth": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookingRequest"
+              },
+              "example": {
+                "room_id": 1,
+                "booking_date": "2026-06-22",
+                "start_time": "10:00",
+                "end_time": "12:00",
+                "purpose": "Rapat tim pengembangan"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Booking berhasil dibuat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "Booking berhasil dibuat, menunggu persetujuan admin" },
+                    "data": { "$ref": "#/components/schemas/Booking" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Ruangan sedang maintenance",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "description": "Bentrok jadwal — ruangan sudah dibooking pada jam tersebut",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/ErrorResponse" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "conflicts": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": { "type": "integer" },
+                                  "start_time": { "type": "string" },
+                                  "end_time": { "type": "string" },
+                                  "status": { "type": "string" }
+                                }
+                              }
+                            },
+                            "room": { "type": "string" },
+                            "requested": {
+                              "type": "object",
+                              "properties": {
+                                "date": { "type": "string" },
+                                "start_time": { "type": "string" },
+                                "end_time": { "type": "string" }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                "example": {
+                  "status": "error",
+                  "message": "Ruangan sudah dibooking pada jam tersebut",
+                  "data": {
+                    "conflicts": [
+                      { "id": 1, "start_time": "10:00", "end_time": "12:00", "status": "approved" }
+                    ],
+                    "room": "Meeting Room A",
+                    "requested": {
+                      "date": "2026-06-22",
+                      "start_time": "11:00",
+                      "end_time": "13:00"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validasi gagal",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Bookings"],
+        "summary": "Approve / Reject booking",
+        "description": "Menyetujui atau menolak booking. **Hanya untuk admin.** Status booking harus **pending** untuk bisa diubah.",
+        "operationId": "updateBookingStatus",
+        "security": [
+          { "bearerAuth": [] }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "description": "ID booking",
+            "schema": { "type": "integer", "example": 1 }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookingStatusUpdate"
+              },
+              "example": {
+                "status": "approved",
+                "admin_notes": "Ruangan tersedia, silakan digunakan"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Status booking berhasil diperbarui",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "Booking telah disetujui" },
+                    "data": { "$ref": "#/components/schemas/Booking" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Transisi status tidak valid (misal: rejected → approved)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "403": {
+            "description": "Akses ditolak (bukan admin)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "Booking tidak ditemukan",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "409": {
+            "description": "Terdeteksi bentrok jadwal dengan booking lain yang sudah approved",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validasi gagal (status tidak valid, admin_notes kosong saat reject)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Bookings"],
+        "summary": "Batalkan booking",
+        "description": "Membatalkan booking. Karyawan hanya bisa membatalkan booking milik sendiri dengan status **pending**. Admin bisa membatalkan booking apapun.",
+        "operationId": "cancelBooking",
+        "security": [
+          { "bearerAuth": [] }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "description": "ID booking",
+            "schema": { "type": "integer", "example": 1 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Booking berhasil dibatalkan",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          },
+          "403": {
+            "description": "Akses ditolak (bukan booking sendiri / status bukan pending)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "Booking tidak ditemukan",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/schedule/schedule.php": {
+      "get": {
+        "tags": ["Schedule"],
+        "summary": "Jadwal ruangan",
+        "description": "Menampilkan jadwal penggunaan ruangan. Bisa ditampilkan per hari atau per minggu. Hanya booking dengan status **approved** dan **pending** yang ditampilkan.",
+        "operationId": "getSchedule",
+        "security": [
+          { "bearerAuth": [] }
+        ],
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "description": "Tanggal (YYYY-MM-DD). Default: hari ini",
+            "schema": { "type": "string", "example": "2026-06-22" }
+          },
+          {
+            "name": "room_id",
+            "in": "query",
+            "required": false,
+            "description": "Filter berdasarkan ruangan",
+            "schema": { "type": "integer", "example": 1 }
+          },
+          {
+            "name": "view",
+            "in": "query",
+            "required": false,
+            "description": "Tampilan: 'day' (harian) atau 'week' (mingguan)",
+            "schema": {
+              "type": "string",
+              "enum": ["day", "week"],
+              "default": "day"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Jadwal berhasil diambil",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "Jadwal ruangan" },
+                    "data": {
+                      "oneOf": [
+                        { "$ref": "#/components/schemas/ScheduleDayResponse" },
+                        { "$ref": "#/components/schemas/ScheduleWeekResponse" }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/dashboard/dashboard.php": {
+      "get": {
+        "tags": ["Dashboard"],
+        "summary": "Statistik dashboard",
+        "description": "Mengembalikan data statistik untuk halaman dashboard: total ruangan, booking aktif hari ini, ruangan tersedia, pending booking, dan jadwal hari ini.",
+        "operationId": "getDashboard",
+        "security": [
+          { "bearerAuth": [] }
+        ],
+        "responses": {
+          "200": {
+            "description": "Data dashboard berhasil diambil",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "Data dashboard" },
+                    "data": { "$ref": "#/components/schemas/DashboardResponse" }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "Token",
+        "description": "Masukkan token yang didapat dari endpoint login/register. Format: `<token>`"
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Token tidak valid atau tidak dikirim",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "status": "error",
+              "message": "Token tidak valid atau sudah expired. Silakan login ulang."
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "SuccessResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "success" },
+          "message": { "type": "string", "example": "Operasi berhasil" }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "error" },
+          "message": { "type": "string", "example": "Deskripsi error" },
+          "errors": {
+            "type": "object",
+            "description": "Field-level validation errors (hanya untuk 422)",
+            "additionalProperties": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "Email user",
+            "example": "admin@office.com"
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "description": "Password user",
+            "example": "password"
+          }
+        }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "required": ["name", "email", "password", "password_confirmation"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Nama lengkap",
+            "example": "John Doe",
+            "minLength": 3,
+            "maxLength": 100
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "Email (harus unik)",
+            "example": "john@office.com"
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "description": "Password minimal 6 karakter",
+            "example": "rahasia123",
+            "minLength": 6
+          },
+          "password_confirmation": {
+            "type": "string",
+            "format": "password",
+            "description": "Konfirmasi password (harus sama dengan password)",
+            "example": "rahasia123"
+          }
+        }
+      },
+      "AuthResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "success" },
+          "message": { "type": "string", "example": "Login berhasil" },
+          "data": {
+            "type": "object",
+            "properties": {
+              "token": {
+                "type": "string",
+                "description": "Bearer Token (64 karakter hex)",
+                "example": "a4908b152de89a885a188044602c2bc7f011a0b6a265072f45bdc4adca503ab0"
+              },
+              "user": {
+                "$ref": "#/components/schemas/User"
+              }
+            }
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "name": { "type": "string", "example": "Admin Utama" },
+          "email": { "type": "string", "example": "admin@office.com" },
+          "role": {
+            "type": "string",
+            "enum": ["admin", "karyawan"],
+            "example": "admin"
+          }
+        }
+      },
+      "Room": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "name": { "type": "string", "example": "Meeting Room A" },
+          "capacity": { "type": "integer", "example": 6 },
+          "facilities": { "type": "string", "example": "Proyektor, Whiteboard, AC, Wi-Fi" },
+          "status": {
+            "type": "string",
+            "enum": ["available", "maintenance"],
+            "example": "available"
+          },
+          "created_at": { "type": "string", "example": "2026-06-22 09:32:08" },
+          "updated_at": { "type": "string", "example": "2026-06-22 09:32:08" }
+        }
+      },
+      "RoomRequest": {
+        "type": "object",
+        "required": ["name", "capacity", "status"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Nama ruangan (harus unik)",
+            "example": "Meeting Room C"
+          },
+          "capacity": {
+            "type": "integer",
+            "description": "Kapasitas maksimal orang",
+            "example": 8,
+            "minimum": 1
+          },
+          "facilities": {
+            "type": "string",
+            "description": "Fasilitas ruangan (opsional)",
+            "example": "Proyektor, AC, Meja Bundar"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["available", "maintenance"],
+            "description": "Status ruangan",
+            "example": "available"
+          }
+        }
+      },
+      "Booking": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "user_id": { "type": "integer", "example": 2 },
+          "user_name": { "type": "string", "example": "John Doe" },
+          "room_id": { "type": "integer", "example": 1 },
+          "room_name": { "type": "string", "example": "Meeting Room A" },
+          "booking_date": { "type": "string", "example": "2026-06-22" },
+          "start_time": { "type": "string", "example": "10:00" },
+          "end_time": { "type": "string", "example": "12:00" },
+          "purpose": { "type": "string", "example": "Rapat tim pengembangan" },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "approved", "rejected", "completed"],
+            "example": "pending"
+          },
+          "admin_notes": { "type": "string", "nullable": true, "example": "Ruangan tersedia" },
+          "created_at": { "type": "string", "example": "2026-06-20 08:30:00" }
+        }
+      },
+      "BookingRequest": {
+        "type": "object",
+        "required": ["room_id", "booking_date", "start_time", "end_time"],
+        "properties": {
+          "room_id": {
+            "type": "integer",
+            "description": "ID ruangan yang akan dibooking",
+            "example": 1
+          },
+          "booking_date": {
+            "type": "string",
+            "format": "date",
+            "description": "Tanggal booking (YYYY-MM-DD)",
+            "example": "2026-06-22"
+          },
+          "start_time": {
+            "type": "string",
+            "description": "Waktu mulai (HH:MM)",
+            "example": "10:00"
+          },
+          "end_time": {
+            "type": "string",
+            "description": "Waktu selesai (HH:MM). Harus setelah start_time",
+            "example": "12:00"
+          },
+          "purpose": {
+            "type": "string",
+            "description": "Tujuan penggunaan ruangan (opsional)",
+            "example": "Rapat tim pengembangan"
+          }
+        }
+      },
+      "BookingStatusUpdate": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["approved", "rejected"],
+            "description": "Status baru untuk booking",
+            "example": "approved"
+          },
+          "admin_notes": {
+            "type": "string",
+            "description": "Catatan admin (wajib jika status = rejected)",
+            "example": "Ruangan tersedia, silakan digunakan"
+          }
+        }
+      },
+      "ScheduleDayResponse": {
+        "type": "object",
+        "properties": {
+          "date": { "type": "string", "example": "2026-06-22" },
+          "schedule": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "room": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "integer" },
+                    "name": { "type": "string" }
+                  }
+                },
+                "bookings": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": { "type": "integer" },
+                      "start_time": { "type": "string" },
+                      "end_time": { "type": "string" },
+                      "purpose": { "type": "string" },
+                      "status": { "type": "string" },
+                      "user": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "example": {
+          "date": "2026-06-22",
+          "schedule": [
+            {
+              "room": { "id": 1, "name": "Meeting Room A" },
+              "bookings": [
+                {
+                  "id": 1,
+                  "start_time": "10:00",
+                  "end_time": "12:00",
+                  "purpose": "Rapat tim",
+                  "status": "approved",
+                  "user": "John Doe"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "ScheduleWeekResponse": {
+        "type": "object",
+        "properties": {
+          "week_start": { "type": "string", "example": "2026-06-22" },
+          "week_end": { "type": "string", "example": "2026-06-28" },
+          "schedule": {
+            "type": "object",
+            "description": "Key: tanggal (YYYY-MM-DD), Value: array booking",
+            "additionalProperties": {
+              "type": "array",
+              "items": { "$ref": "#/components/schemas/Booking" }
+            }
+          }
+        },
+        "example": {
+          "week_start": "2026-06-22",
+          "week_end": "2026-06-28",
+          "schedule": {
+            "2026-06-22": [
+              {
+                "id": 1,
+                "start_time": "10:00",
+                "end_time": "12:00",
+                "purpose": "Rapat tim",
+                "status": "approved",
+                "user_name": "John Doe",
+                "room_name": "Meeting Room A"
+              }
+            ],
+            "2026-06-23": []
+          }
+        }
+      },
+      "DashboardResponse": {
+        "type": "object",
+        "properties": {
+          "total_rooms": { "type": "integer", "example": 5 },
+          "available_rooms": { "type": "integer", "example": 4 },
+          "maintenance_rooms": { "type": "integer", "example": 1 },
+          "active_bookings_today": { "type": "integer", "example": 3 },
+          "pending_bookings": { "type": "integer", "example": 2 },
+          "today_schedule": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "room": { "type": "string" },
+                "start_time": { "type": "string" },
+                "end_time": { "type": "string" },
+                "purpose": { "type": "string" },
+                "status": { "type": "string" }
+              }
+            }
+          }
+        },
+        "example": {
+          "total_rooms": 5,
+          "available_rooms": 4,
+          "maintenance_rooms": 1,
+          "active_bookings_today": 3,
+          "pending_bookings": 2,
+          "today_schedule": [
+            {
+              "room": "Meeting Room A",
+              "start_time": "10:00",
+              "end_time": "12:00",
+              "purpose": "Rapat tim",
+              "status": "approved"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
