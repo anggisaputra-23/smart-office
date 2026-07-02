@@ -1,6 +1,7 @@
 <div align="center">
-  <img src="assets/images/logo.png" alt="SOMS Logo" height="120">
-  <h1>Smart Office Management System</h1>
+  <img src="assets/images/logo.svg" alt="SOMS Logo" height="120">
+  
+<h1>Smart Office Management System</h1>
   <p>Sistem manajemen peminjaman ruangan kantor berbasis web</p>
 </div>
 
