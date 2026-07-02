@@ -1,4 +1,4 @@
 <?php
 /* Smart Office Management System - by Anggi Dwi Saputra */
-header('Location: login.php');
+header('Location: pbp/login.php');
 exit;
