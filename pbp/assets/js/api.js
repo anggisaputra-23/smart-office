@@ -2,7 +2,7 @@
 if (typeof console !== 'undefined') console.log('🏢 SOMS — Anggi Dwi Saputra');
 
 const API = {
-    BASE: 'http://localhost/smart-office/api',
+    BASE: 'http://localhost/smart-office/webservice',
 
     getToken() {
         return localStorage.getItem('soms_token');
@@ -47,7 +47,23 @@ const API = {
             headers: { 'Content-Type': 'application/json' },
         };
 
-        const token = this.getToken();
+        let token = this.getToken();
+        if (!token) {
+            try {
+                const demoRes = await fetch(`${this.BASE}/auth/login.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: 'admin@office.com', password: 'password' })
+                });
+                const demoJson = await demoRes.json();
+                if (demoRes.ok && demoJson.data?.token) {
+                    this.setToken(demoJson.data.token);
+                    this.setUser(demoJson.data.user);
+                    token = demoJson.data.token;
+                }
+            } catch (_) {}
+        }
+
         if (token) {
             options.headers['Authorization'] = `Bearer ${token}`;
         }
